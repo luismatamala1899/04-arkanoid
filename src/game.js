@@ -12,9 +12,17 @@ const state = {
   explosions: [],        // { x, y, color, elapsed }  elapsed en ms
 };
 
-state.bricks = buildBricks( state.levelIndex );
-
 let lastTime = null;
+
+// Partida nueva: puntos 0, vidas 3, nivel 1 y pelota pegada a la pala
+function resetGame() {
+  state.score = 0;
+  state.lives = START_LIVES;
+  state.levelIndex = 0;
+  state.bricks = buildBricks( state.levelIndex );
+  state.explosions = [];
+  resetBall();
+}
 
 function updatePaddle( dt ) {
   const p = state.paddle;
@@ -67,14 +75,17 @@ function updateBall( dt ) {
   if ( b.x < 0 ) {
     b.x = 0;
     b.vx = Math.abs( b.vx );
+    playSound( 'bounce' );
   } else if ( b.x + b.size > CANVAS_W ) {
     b.x = CANVAS_W - b.size;
     b.vx = -Math.abs( b.vx );
+    playSound( 'bounce' );
   }
 
   if ( b.y < 0 ) {
     b.y = 0;
     b.vy = Math.abs( b.vy );
+    playSound( 'bounce' );
   }
 
   hitBrick();
@@ -82,6 +93,18 @@ function updateBall( dt ) {
 
   if ( b.y > CANVAS_H ) {
     loseLife();
+  }
+}
+
+// Vidas y puntos se mantienen; la pelota sale a la velocidad del nuevo nivel al lanzarla
+function nextLevel() {
+  state.levelIndex++;
+  if ( state.levelIndex < LEVELS.length ) {
+    state.bricks = buildBricks( state.levelIndex );
+    state.explosions = [];
+    resetBall();
+  } else {
+    state.screen = 'win';
   }
 }
 
@@ -115,6 +138,16 @@ function hitBrick() {
 
   brick.alive = false;
   state.score += POINTS_PER_BRICK;
+  playSound( 'break' );
+  state.explosions.push( { x: brick.x, y: brick.y, color: brick.color, elapsed: 0 } );
+}
+
+// EXPLOSION_DURATION es la duración de cada frame; la explosión se elimina tras el último
+function updateExplosions( dt ) {
+  for ( const e of state.explosions ) e.elapsed += dt * 1000;
+  state.explosions = state.explosions.filter(
+    ( e ) => Math.floor( e.elapsed / EXPLOSION_DURATION ) < EXPLOSION_FRAMES[ e.color ].length
+  );
 }
 
 // El ángulo de salida depende de dónde golpea la pelota: centro → vertical, bordes → hasta 60°
@@ -131,13 +164,41 @@ function bounceOnPaddle() {
 
   b.vx = v * Math.sin( angle );
   b.vy = -v * Math.cos( angle );
+  playSound( 'bounce' );
 }
 
 function update( dt ) {
-  if ( state.screen === 'gameover' ) return;
-  updatePaddle( dt );
-  updateBall( dt );
+  switch ( state.screen ) {
+    case 'menu':
+      if ( input.actionPressed ) {
+        resetGame();
+        state.screen = 'playing';
+      }
+      break;
+    case 'playing':
+      if ( input.pausePressed ) {
+        state.screen = 'paused';
+        break;
+      }
+      updatePaddle( dt );
+      updateBall( dt );
+      if ( state.screen === 'playing' && !state.bricks.some( ( r ) => r.alive ) ) {
+        nextLevel();
+      }
+      break;
+    case 'paused':
+      if ( input.pausePressed ) state.screen = 'playing';
+      break;
+    case 'gameover':
+    case 'win':
+      if ( input.actionPressed ) state.screen = 'menu';
+      break;
+  }
+  updateExplosions( dt );
+
+  // Las pulsaciones se consumen aquí, así la que empieza la partida no lanza la pelota
   input.actionPressed = false;
+  input.pausePressed = false;
 }
 
 function render() {
@@ -148,6 +209,11 @@ function render() {
     if ( b.alive ) drawSprite( ctx, 'block_' + b.color, b.x, b.y, b.w, b.h );
   }
 
+  for ( const e of state.explosions ) {
+    const frame = EXPLOSION_FRAMES[ e.color ][ Math.floor( e.elapsed / EXPLOSION_DURATION ) ];
+    drawFrame( ctx, frame, e.x, e.y, BRICK_W, BRICK_H );
+  }
+
   const p = state.paddle;
   drawSprite( ctx, 'paddle', p.x, p.y, p.w, p.h );
 
@@ -156,8 +222,14 @@ function render() {
 
   drawHud();
 
-  if ( state.screen === 'gameover' ) {
+  if ( state.screen === 'menu' ) {
+    drawOverlay( 'ARKANOID', 'Pulsa Espacio o haz clic para empezar' );
+  } else if ( state.screen === 'paused' ) {
+    drawOverlay( 'PAUSA', 'Pulsa P para continuar' );
+  } else if ( state.screen === 'gameover' ) {
     drawOverlay( 'GAME OVER', 'Puntos: ' + state.score );
+  } else if ( state.screen === 'win' ) {
+    drawOverlay( '¡HAS GANADO!', 'Puntos: ' + state.score );
   }
 }
 
@@ -167,8 +239,15 @@ function drawHud() {
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
   ctx.fillText( 'Puntos: ' + state.score, 16, 30 );
+
+  // Una bola por vida; el texto se coloca según START_LIVES para que no se desplace al perder vidas
+  const gap = 6;
+  const ballsX = CANVAS_W - 16 - START_LIVES * ( BALL_SIZE + gap ) + gap;
   ctx.textAlign = 'right';
-  ctx.fillText( 'Vidas: ' + state.lives, CANVAS_W - 16, 30 );
+  ctx.fillText( 'Vidas:', ballsX - 10, 30 );
+  for ( let i = 0; i < state.lives; i++ ) {
+    drawSprite( ctx, 'ball', ballsX + i * ( BALL_SIZE + gap ), 30 - BALL_SIZE / 2, BALL_SIZE, BALL_SIZE );
+  }
 }
 
 // Capa semitransparente con un título y un subtítulo centrados
@@ -195,6 +274,8 @@ function loop( now ) {
 
   requestAnimationFrame( loop );
 }
+
+resetGame();
 
 loadSpritesheet( () => {
   requestAnimationFrame( loop );

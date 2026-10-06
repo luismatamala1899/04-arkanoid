@@ -154,13 +154,13 @@ const state = {
 
 ## Plan de implementación
 
-1. **Esqueleto.** Crear `index.html` (canvas `#game` de 800×600, centrado, fondo de página oscuro) que cargue los 6 scripts en el orden indicado. Crear `src/config.js` con las constantes. Crear `src/game.js` con un loop de `requestAnimationFrame` que calcule `dt` limitado a `MAX_DT` y pinte el fondo de negro. Arrancar el loop dentro de `loadSpritesheet`. Crear `src/levels.js`, `src/input.js` y `src/audio.js` vacíos. Prueba manual: con `npx serve .` se ve un canvas negro y la consola no muestra errores.
+1. **Esqueleto.** Crear `index.html` (canvas `#game` de 800×600, centrado, fondo de página gris mediano `#808080`) que cargue los 6 scripts en el orden indicado. Crear `src/config.js` con las constantes. Crear `src/game.js` con un loop de `requestAnimationFrame` que calcule `dt` limitado a `MAX_DT` y pinte el fondo de negro. Arrancar el loop dentro de `loadSpritesheet`. Crear `src/levels.js`, `src/input.js` y `src/audio.js` vacíos. Prueba manual: con `npx serve .` se ve un canvas negro y la consola no muestra errores.
 2. **Bloques.** En `src/levels.js`, añadir `COLOR_MAP`, `LEVELS` y `buildBricks(levelIndex)`. En `game.js`, cargar el nivel 1 en `state.bricks` y dibujar los bloques vivos con `drawSprite(ctx, 'block_' + color, ...)`. Prueba manual: se ven 5 filas de 12 bloques en los colores del nivel 1.
 3. **Input y pala.** En `src/input.js`, escuchar `keydown`/`keyup` (flechas, A/D, Espacio, P) en `window` y `mousemove`/`mousedown` en el canvas. Convertir `clientX` a coordenadas del canvas con `getBoundingClientRect`. Llamar a `preventDefault` en Espacio y flechas. En `game.js`, mover la pala según `input.lastSource`: con teclado a `PADDLE_SPEED`, y con ratón centrada en `mouseX`. Limitarla al ancho del canvas y dibujarla con `drawSprite(ctx, 'paddle', ...)`. Prueba manual: la pala se mueve con flechas, con A/D y con el ratón, y no sale del canvas.
 4. **Pelota y paredes.** La pelota empieza pegada (`stuck: true`) centrada sobre la pala y la sigue. Con `actionPressed` se lanza a la velocidad del nivel con `LAUNCH_ANGLE`. Rebota en las paredes izquierda, derecha y superior, recolocándose dentro del canvas para no quedarse pegada. Si `ball.y > CANVAS_H`, vuelve a quedar pegada a la pala (las vidas llegan en el paso 7). Prueba manual: Espacio o clic lanzan la pelota, que rebota en tres paredes y vuelve a la pala al caer.
 5. **Rebote en la pala.** Si la pelota solapa la pala y `vy > 0`, calcular `offset = (centroPelota - centroPala) / (PADDLE_W / 2)` limitado a [-1, 1] y `ángulo = offset * MAX_BOUNCE_ANGLE`. La nueva velocidad es `vx = v * sin(ángulo)` y `vy = -v * cos(ángulo)`, conservando el módulo `v`. Prueba manual: un golpe en el centro sale casi vertical y uno en los bordes sale inclinado hacia ese lado.
 6. **Colisión con bloques y puntos.** Detectar el solape AABB entre la pelota y los bloques vivos. Procesar como mucho un bloque por frame. El eje de rebote es el de menor penetración: se invierte `vx` o `vy`. El bloque pasa a `alive: false` y se suman `POINTS_PER_BRICK` a `state.score`. Prueba manual: cada impacto rompe un bloque y la pelota rebota en el eje correcto.
-7. **Vidas, HUD y Game Over.** Al caer la pelota, restar una vida. Con vidas restantes, la pelota vuelve a la pala y los bloques se quedan como estaban. Con 0 vidas, `state.screen = 'gameover'` y se dibuja la capa "GAME OVER" con la puntuación. Dibujar el HUD arriba: `Puntos: N` a la izquierda y `Vidas: N` a la derecha, en texto blanco. Prueba manual: perder 3 pelotas muestra "GAME OVER" y el juego se detiene.
+7. **Vidas, HUD y Game Over.** Al caer la pelota, restar una vida. Con vidas restantes, la pelota vuelve a la pala y los bloques se quedan como estaban. Con 0 vidas, `state.screen = 'gameover'` y se dibuja la capa "GAME OVER" con la puntuación. Dibujar el HUD arriba: `Puntos: N` a la izquierda, en texto blanco, y a la derecha el texto blanco `Vidas:` seguido de una bola (sprite `ball`, 16×16) por cada vida restante. Prueba manual: perder 3 pelotas muestra "GAME OVER" y el juego se detiene.
 8. **Pantalla de inicio y reinicio.** El juego arranca en `screen: 'menu'`, con la capa "ARKANOID" y "Pulsa Espacio o haz clic para empezar". En `menu`, `actionPressed` llama a `resetGame()` (puntos 0, vidas 3, nivel 1, pelota pegada) y pasa a `playing`, consumiendo esa pulsación para que no lance la pelota. En `gameover`, `actionPressed` vuelve a `menu`. Prueba manual: inicio → jugar → Game Over → inicio → partida nueva con 0 puntos y 3 vidas.
 9. **Pausa.** En `playing`, `pausePressed` pasa a `paused`. En `paused`, vuelve a `playing`. En pausa no se actualizan ni la pala ni la pelota, y se dibuja la capa "PAUSA" con "Pulsa P para continuar". Prueba manual: P congela el juego y P lo reanuda donde estaba.
 10. **Niveles y victoria.** Cuando no quedan bloques vivos, incrementar `levelIndex`. Si quedan niveles, cargar el siguiente con `buildBricks`, vaciar `explosions` y dejar la pelota pegada con la velocidad del nuevo nivel. Vidas y puntos se mantienen. Al superar el nivel 3, `state.screen = 'win'` con la capa "¡HAS GANADO!" y la puntuación. En `win`, `actionPressed` vuelve a `menu`. Prueba manual: limpiar los 3 niveles lleva a la pantalla de victoria.
@@ -181,8 +181,9 @@ const state = {
 - [ ] La pelota rebota en las paredes izquierda, derecha y superior.
 - [ ] Un golpe en el centro de la pala devuelve la pelota casi vertical, y uno cerca de un borde la devuelve inclinada hacia ese lado.
 - [ ] Cada bloque desaparece al primer impacto y suma exactamente 10 puntos al HUD.
-- [ ] El HUD muestra `Puntos: N` y `Vidas: N` en todo momento durante el juego.
-- [ ] Si la pelota cae por abajo, `Vidas` baja en 1 y la pelota vuelve a la pala sin reiniciar los bloques.
+- [ ] La página alrededor del canvas tiene fondo gris mediano.
+- [ ] El HUD muestra `Puntos: N` y `Vidas:` seguido de una bola por vida en todo momento durante el juego.
+- [ ] Si la pelota cae por abajo, desaparece una bola de `Vidas` y la pelota vuelve a la pala sin reiniciar los bloques.
 - [ ] Al perder la 3ª vida aparece "GAME OVER" con la puntuación final.
 - [ ] Desde "GAME OVER", Espacio o clic vuelven a la pantalla de inicio, y la siguiente partida empieza con 0 puntos y 3 vidas.
 - [ ] La tecla P pausa el juego y muestra "PAUSA", y otra pulsación de P lo reanuda en el mismo punto.
@@ -218,6 +219,9 @@ const state = {
 - **No:** velocidades en px/frame. El juego iría el doble de rápido a 120 Hz.
 - **Sí:** canvas de 800×600 con bloques a 64×32, pala a 120×16 y pelota a 16×16.
 - **No:** 480×640 vertical a tamaño nativo. Queda pequeño en monitores actuales.
+- **Sí:** fondo de página gris mediano (`#808080`) y canvas en negro. El gris enmarca el área de juego, y el negro mantiene el contraste del HUD y de las capas de pantalla.
+- **Sí:** vidas en el HUD como `Vidas:` seguido de una bola por vida. Se leen de un vistazo y reutilizan el sprite `ball`.
+- **No:** solo el número (`Vidas: N`). Es menos visual.
 - **Sí:** 5 scripts clásicos en `src/` (`config`, `levels`, `input`, `audio` y `game`). Hay separación de responsabilidades sin depender de módulos ES, y es coherente con `spritesheet.js`, que también es un script clásico.
 - **No:** módulos ES. Mezclar módulos con los globales de `spritesheet.js` añade fricción sin beneficio en un MVP.
 - **No:** separar `physics.js` y `render.js`. Hay demasiados globales compartidos para el tamaño actual. Se puede hacer en una refactorización futura.
